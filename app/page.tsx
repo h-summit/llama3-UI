@@ -138,7 +138,7 @@ function Li_Message({
   );
 }
 
-export default function page() {
+export default function App() {
 
   const chatManager = new ChatManager('http://localhost:11434/api/chat');
   const textAreaDomRef = useRef<HTMLTextAreaElement | null>(null);
