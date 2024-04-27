@@ -1,113 +1,245 @@
-import Image from "next/image";
+"use client"
+import { IoMdSend } from "react-icons/io";
+import { FaRegStopCircle } from "react-icons/fa";
+import clsx from 'clsx';
+import React, { useEffect, useRef, useState } from 'react'
+import Markdown from 'marked-react';
+import { useContext, createContext } from 'react';
 
-export default function Home() {
+type isChattingContextType = {
+  isChatting: boolean;
+  setIsChatting: React.Dispatch<React.SetStateAction<boolean>>
+}
+const isChattingContext = createContext<isChattingContextType>({
+  isChatting: false,
+  setIsChatting: () => { }
+});
+
+function MarkdownRender({
+  markdown,
+  baseURL
+}: {
+  markdown: string,
+  baseURL?: string
+}) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <article className='prose 
+        prose-h1:text-white
+        prose-h2:text-white
+        prose-h3:text-white
+        prose-h4:text-white
+        prose-p:text-white
+        prose-a:text-white
+        prose-ul:text-white
+        prose-strong:text-white
+        prose-code:text-white
+        prose-li:text-white
+        prose-span:text-white
+      '>
+      <Markdown value={markdown} baseURL={baseURL ? baseURL : ''} />
+    </article >
+  )
+}
+
+type Message = {
+  role: "assistant" | "user" | "system";
+  content: string | ReadableStreamDefaultReader;
+}
+
+class ChatManager {
+
+  private messages: Message[] = [{
+    role: "system",
+    content: "You are a helpful AI agent."
+  }]
+
+  url: string = '';
+
+  constructor(url: string) {
+    this.url = url;
+
+  };
+
+  getMessages(): Message[] {
+    return this.messages;
+  };
+
+  async chat(prompt: string): Promise<Response> {
+    const body = {
+      model: 'llama3',
+      messages: [...this.messages, {
+        role: "user",
+        content: prompt
+      }]
+    }
+    return fetch(this.url, {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+  }
+};
+
+function Li_Message({
+  message
+}: {
+  message: Message
+}) {
+  const [text, setText] = useState<string>('');
+  const { isChatting, setIsChatting } = useContext(isChattingContext);
+
+  async function readStreamAndSet(
+    reader: ReadableStreamDefaultReader
+  ) {
+    reader.read().then(({ done, value }) => {
+      if (done) {
+        setIsChatting(false);
+        return; // Stop reading when done
+      }
+      const rawjson = new TextDecoder().decode(value);
+      const json = JSON.parse(rawjson);
+      if (json.done === false) {
+        setText(original => original + json.message.content);
+      }
+      if (!isChatting) { // Stop reading if isChatting is false
+        return;
+      }
+      readStreamAndSet(reader);
+    }).catch(error => {
+      console.error('Error reading stream:', error);
+    });
+  }
+
+  useEffect(() => {
+    if (typeof (message.content) === 'string') {
+      setText(message.content);
+    }
+    if (message.content instanceof ReadableStreamDefaultReader) {
+      const reader = message.content;
+      readStreamAndSet(reader);
+    }
+  }, []);
+
+  return (
+    <li
+      className={clsx(
+        'flex w-full space-x-4',
+        message.role === 'user' && 'flex-row-reverse space-x-reverse',
+        message.role === 'assistant' && 'flex-row'
+      )}
+    >
+      <div>
+        {message.role === 'assistant' && 'Llama3'}
+      </div>
+      <div>
+        <MarkdownRender markdown={text} baseURL='' />
+      </div>
+    </li>
+  );
+}
+
+export default function page() {
+
+  const chatManager = new ChatManager('http://localhost:11434/api/chat');
+  const textAreaDomRef = useRef<HTMLTextAreaElement | null>(null);
+  const [messages, setMessages] = useState<Array<Message>>([]);
+  const [isChatting, setIsChatting] = useState<boolean>(false);
+  const [chattingReader, setReader] = useState<ReadableStreamDefaultReader<Uint8Array>>();
+
+  const addOneMessage = (message: Message) => {
+    setMessages(original => [
+      ...original,
+      message
+    ])
+  }
+
+  const sendMessage = async () => {
+    console.log('!!!!asdasdasdas');
+    const user_input = textAreaDomRef.current?.value
+    if (!user_input) return;
+
+    if (textAreaDomRef.current) {
+      textAreaDomRef.current.value = '';
+    }
+
+    setIsChatting(true);
+    addOneMessage({
+      role: "user",
+      content: user_input
+    });
+
+    chatManager.chat(user_input)
+      .then(response => response.body?.getReader())
+      .then(reader => {
+        if (reader) {
+          setReader(reader);
+          addOneMessage({
+            role: "assistant",
+            content: reader
+          });
+        }
+      })
+
+  };
+
+  return (
+    <isChattingContext.Provider value={{
+      isChatting: isChatting,
+      setIsChatting: setIsChatting
+    }}>
+      <div className='h-[100vh] full w-full bg-slate-800 text-slate-100'>
+        <div className='h-[85%] w-[50%] mx-auto border p-10 overflow-y-auto'>
+          <ul className='space-y-4'>
+            {
+              messages.map((message: Message, index: number) => {
+                return <Li_Message
+                  message={message}
+                  key={index}
+                >
+                </Li_Message>;
+              })
+            }
+          </ul>
+        </div>
+        <div className='h-[15%] w-[100%] border flex p-3 px-48 space-x-3'>
+          <span>
+            input your prompt here:
+          </span>
+          <div className={clsx(
+            'w-[90%]  bg-slate-700 text-slate-50',
+            isChatting && 'opacity-50 cursor-default'
+          )}>
+            <textarea
+              disabled={isChatting}
+              ref={textAreaDomRef}
+              className='w-full h-full  bg-slate-700 p-3 text-slate-50'
+              onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  sendMessage();
+                }
+              }}
+            >
+            </textarea>
+          </div>
+          {
+            isChatting ?
+              <button
+                onClick={() => {
+                  chattingReader?.cancel();
+                }}
+              >
+                <FaRegStopCircle className="w-6 h-6" />
+              </button>
+              :
+              <button
+                onClick={sendMessage}
+              >
+                <IoMdSend className="w-6 h-6" />
+              </button>
+          }
         </div>
       </div>
+    </isChattingContext.Provider>
 
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  );
+  )
 }
