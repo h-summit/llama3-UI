@@ -1,5 +1,5 @@
 
-This is a Chatting Web UI. It involves no more than 300 line codes of TS, so it is simple and easy to learn.
+This is a Chatting Web UI project. It features a concise codebase with no more than 300 lines of TypeScript, making it simple and straightforward for learning purposes.
 
 ![alt text](./Snipaste_2024-04-27_12-59-02.png)
 
@@ -8,7 +8,7 @@ This is a Chatting Web UI. It involves no more than 300 line codes of TS, so it 
 + Nodejs
 + Ollama
 
-You can find the download addreas and installation instruction here: 
+You can find download links and installation instructions at the following URLs:
 + https://nodejs.org/en/download
 + https://github.com/ollama/ollama/tree/main
 
