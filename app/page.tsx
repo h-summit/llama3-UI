@@ -129,6 +129,7 @@ function Li_Message({
     >
       <div>
         {message.role === 'assistant' && 'Llama3'}
+        {message.role === 'user' && 'You'}
       </div>
       <div>
         <MarkdownRender markdown={text} baseURL='' />
